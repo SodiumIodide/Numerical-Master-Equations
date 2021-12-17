@@ -54,7 +54,7 @@ Initial conditions are defined in terms of radiation intensity and material temp
 In these equations, \(f\) and \(g\) represent non-constant coefficients from material energy balance constraints, and are defined as follows:
 
 \begin{equation*}
-    f_i\left(\phi, \theta, t\right) = c \sigma_{a,i}\left(\theta\right) \left(c a \theta^4 - \phi\right), \quad i = 1, 2
+    f_i\left(\phi, \theta\right) = c \sigma_{a,i}\left(\theta\right) \left(c a \theta^4 - \phi\right), \quad i = 1, 2
 \end{equation*}
 
 \begin{equation*}
@@ -253,9 +253,195 @@ Individually, these conditional probability density vectors are represented as a
 
 With a similar structure for \(\vec{P}^n_2\), the result is a vector \(\vec{P}^n\) consisting of \(32\) elements. This vector consists of known values derived from the initial condition at time-step \(n=0\). There is a similar structure applied to the vector \(\vec{P}^{n+1}\), consisting of unknown values to be solved for.
 
-Building the mass matrix \(\mathbf{M}\) also relies on the knowledge of the material-stacked row-major format. Again using the example of a \(4 \times 4\) grid of values, \(\mathbf{M}\) becomes a \(32 \times 32\) element matrix with many zeros, as a sparse representation. Even for a \(4 \times 4\) grid of discretized domain, the resulting \(32 \times 32\) mass matrix is too large to represent on this page.
+Building the mass matrix \(\mathbf{M}\) also relies on the knowledge of the material-stacked row-major format. Again using the example of a \(4 \times 4\) grid of values, \(\mathbf{M}\) becomes a \(32 \times 32\) element matrix with many zeros, becoming a sparse data structure. Even for a \(4 \times 4\) grid of discretized domain, the resulting \(32 \times 32\) mass matrix is too large to represent on this page. However, a visual indication may be seen from actually constructing the sparse matrix and using a typical numerical "spy" visualization method on the resulting data. Such a mass matrix for the \(4 \times 4\) domain discretization looks as seen in the image below:
 
-The size of the resulting matrix scales very rapidly with the domain discretization. A \(100 \times 100\) domain discretization results in a \(20000 \times 20000\) sparse mass matrix to be solved with a direct solution method. An iterative solution method may be possible, but typically requires a preconditioned problem and such numerical studies are likely to be outside the scope of the current research domain.
+\begin{figure}[H]
+    \centering
+    \includegraphics[scale=1.0]{img/spy4.png}
+\end{figure}
 
+The size of the resulting matrix scales very rapidly with the domain discretization. A \(100 \times 100\) domain discretization results in a \(20000 \times 20000\) sparse mass matrix to be solved with a direct solution method. For reference, the data visualization of such a matrix looks as seen in the image below, representing an incredibly sparse numerical pattern:
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[scale=1.0]{img/spy100.png}
+\end{figure}
+
+An iterative solution method may be possible, but typically requires a preconditioned problem and such numerical studies are likely to be outside the scope of the current research domain.
+
+\newpage
+\section*{Galerkin Finite Element}
+To facilitate the Galerkin finite element solution, we can rewrite the original equations by replacing the terms \(f_i P_i\) and \(g_i P_i\) with \(F_i\) and \(G_i\), respectively. Leaving off the dependence on \(\phi\), \(\theta\), and \(t\) for brevity:
+
+\begin{equation*}
+    \frac{\partial P_1}{\partial t} + \frac{\partial F_1}{\partial \phi} + \frac{\partial G_1}{\partial \theta} + \frac{1}{\tau_1} P_1 = \frac{1}{\tau_2} P_2
+\end{equation*}
+
+\begin{equation*}
+    \frac{\partial P_2}{\partial t} + \frac{\partial F_2}{\partial \phi} + \frac{\partial G_2}{\partial \theta} + \frac{1}{\tau_2} P_2 = \frac{1}{\tau_1} P_1
+\end{equation*}
+
+We begin by establishing the equations including basis functions \(v\) and \(w\):
+
+\begin{equation*}
+    \int \int v\left(\phi\right) w\left(\theta\right) P_1 \left(\phi, \theta\right) d\phi d\theta
+\end{equation*}
+
+\begin{equation*}
+    \int \int v\left(\phi\right) w\left(\theta\right) P_2 \left(\phi, \theta\right) d\phi d\theta
+\end{equation*}
+
+As well as for the multiphysics terms in \(\phi\) discretization:
+
+\begin{equation*}
+    \int \int v\left(\phi\right) \frac{\partial F_1}{\partial \phi} d\phi d\theta
+\end{equation*}
+
+\begin{equation*}
+    \int \int v\left(\phi\right) \frac{\partial F_2}{\partial \phi} d\phi d\theta
+\end{equation*}
+
+And the multiphysics terms in \(\theta\) discretization:
+
+\begin{equation*}
+    \int \int w\left(\theta\right) \frac{\partial G_1}{\partial \theta} d\phi d\theta
+\end{equation*}
+
+\begin{equation*}
+    \int \int w\left(\theta\right) \frac{\partial G_2}{\partial \theta} d\phi d\theta
+\end{equation*}
+
+This simplifies to an equation consisting of a constant mass-matrix term, subscripted by the section of domain it appears in. For the \(F_i\) terms:
+
+\begin{equation*}
+    M_\theta \int_{\phi_L}^{\phi_R} v\left(\phi\right) \frac{\partial F_1}{\partial \phi} d\phi
+\end{equation*}
+
+\begin{equation*}
+    M_\theta \int_{\phi_L}^{\phi_R} v\left(\phi\right) \frac{\partial F_2}{\partial \phi} d\phi
+\end{equation*}
+
+And for the \(G_i\) terms:
+
+\begin{equation*}
+    M_\phi \int_{\theta_B}^{\theta_T} w\left(\theta\right) \frac{\partial G_1}{\partial \theta} d\theta
+\end{equation*}
+
+\begin{equation*}
+    M_\phi \int_{\theta_B}^{\theta_T} w\left(\theta\right) \frac{\partial G_2}{\partial \theta} d\theta
+\end{equation*}
+
+Integrating by parts results in the following terms:
+
+\begin{equation*}
+    M_\theta \left(v\left(\phi\right)F_1\left(\phi\right)\rvert_{\phi_L}^{\phi_R} - \int v^\prime\left(\phi\right) F_1\left(\phi\right) d\phi\right)
+\end{equation*}
+
+\begin{equation*}
+    M_\theta \left(v\left(\phi\right)F_2\left(\phi\right)\rvert_{\phi_L}^{\phi_R} - \int v^\prime\left(\phi\right) F_2\left(\phi\right) d\phi\right)
+\end{equation*}
+
+\begin{equation*}
+    M_\phi \left(w\left(\theta\right)G_1\left(\theta\right)\rvert_{\theta_B}^{\theta_T} - \int w^\prime\left(\phi\right) G_1\left(\theta\right) d\theta\right)
+\end{equation*}
+
+\begin{equation*}
+    M_\phi \left(w\left(\theta\right)G_2\left(\theta\right)\rvert_{\theta_B}^{\theta_T} - \int w^\prime\left(\theta\right) G_2\left(\theta\right) d\theta\right)
+\end{equation*}
+
+In these equations, we can identify individual components for computation. For example, taking the first equation, it can be rewritten according to:
+
+\begin{equation*}
+    v\left(\phi_R\right)F_1\left(\phi_R\right) = L
+\end{equation*}
+
+\begin{equation*}
+    v\left(\phi_L\right)F_1\left(\phi_L\right) = V
+\end{equation*}
+
+Taking note that in the upwinding sense of defining \(V\), \(\phi_L\) is equivalent to \(\phi_R\) from the previous cell.
+
+\begin{equation*}
+    \int_{\phi_L}^{\phi_R} v^\prime\left(\phi\right) F_1\left(\phi\right) d\phi = C
+\end{equation*}
+
+Resulting in, with cellular indices as subscripts:
+
+\begin{equation*}
+    M_\theta \left(L - C\right)_{i,j} - M_\theta V_{i-1,j}
+\end{equation*}
+
+Now take note that the general form of \(\mathbf{M}\) is as follows:
+
+\begin{equation*}
+    \mathbf{M} = M_\phi \otimes M_\theta
+\end{equation*}
+
+A two-by-two discretization domain would result in the following matrix form:
+
+\begin{equation*}
+    \mathbf{M} =
+    \begin{bmatrix}
+        M_{0,0} & 0 & 0 & 0 \\
+        0 & M_{1,0} & 0 & 0 \\
+        0 & 0 & M_{0,1} & 0 \\
+        0 & 0 & 0 & M_{1,1}
+    \end{bmatrix}
+\end{equation*}
+
+We can use this substitution into the full equation, with similar steps for the \(G_1\) terms:
+
+\begin{equation*}
+    \left(M + \left(L - C\right)_\phi + \left(L - C\right)_\theta + \frac{1}{\tau_1}M\right) \vec{P}_1 - \frac{1}{\tau_2}M \vec{P}_2 = V_\phi \vec{P}_1 + V_\theta \vec{P_1}
+\end{equation*}
+
+Incorporating a backward Euler substitution with superscripted index \(n\):
+
+\begin{multline*}
+    \left(\frac{1}{\Delta t} M + \left(L - C\right)_\phi + \left(L - C\right)_\theta + \frac{1}{\tau_1} M\right) \vec{P}_1^{n+1} - \frac{1}{\tau_2}M \vec{P}_2^{n+1} \\= V_\phi \vec{P}_1^{n+1} + V_\theta \vec{P_1}^{n+1} + \frac{1}{\Delta t} M \vec{P}_1^{n}
+\end{multline*}
+
+\begin{multline*}
+    \left(\frac{1}{\Delta t} M + \left(L - C\right)_\phi + \left(L - C\right)_\theta + \frac{1}{\tau_2} M\right) \vec{P}_2^{n+1} - \frac{1}{\tau_1}M \vec{P}_1^{n+1} \\= V_\phi \vec{P}_2^{n+1} + V_\theta \vec{P_2}^{n+1} + \frac{1}{\Delta t} M \vec{P}_2^{n}
+\end{multline*}
+
+We can again simplify terms:
+
+\begin{equation*}
+    \left(L - C\right)_\phi + \left(L - C\right)_\theta - V_\phi - V_\theta = Q
+\end{equation*}
+
+Resulting in:
+
+\begin{equation*}
+    \begin{bmatrix}
+        \left(\frac{1}{\Delta t} - \frac{1}{\tau_1}\right) M + Q_1 & -\frac{1}{\tau_2} M \\
+        -\frac{1}{\tau_1}M & \left(\frac{1}{\Delta t} - \frac{1}{\tau_2}\right)M + Q_2
+    \end{bmatrix}
+    \begin{bmatrix}
+        P_1 \\
+        P_2
+    \end{bmatrix}^{n+1}
+    =
+    \begin{bmatrix}
+        \frac{1}{\Delta t} M & 0 \\
+        0 & \frac{1}{\Delta t}
+    \end{bmatrix}
+    \begin{bmatrix}
+        P_1 \\
+        P_2
+    \end{bmatrix}^n
+\end{equation*}
+
+This is approachable by multiplying through from the left by:
+
+\begin{equation*}
+    \begin{bmatrix}
+        \frac{1}{\Delta t}M & 0 \\
+        0 & \frac{1}{\Delta t} M
+    \end{bmatrix}^{-1}
+\end{equation*}
+
+The main bulk of this construction consists of using appropriate basis functions to form \(C\), \(L\), and \(V\), which collectively form the terms \(Q_i\).
 
 \end{document}
